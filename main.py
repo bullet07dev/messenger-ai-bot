@@ -11,34 +11,39 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "jeafred_bot_123").strip()
 def ask_ai(user_message):
     if not GROQ_KEY:
         return "AI key not set. Add GROQ_KEY in Render."
-    try:
-        r = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
-            json={
-                "model": "llama-3.1-8b-instant",
-                "messages": [
-                    {"role": "system", "content": "You are a friendly AI for Jeafred's Facebook Page in Guimba. Reply short, helpful, in English or Taglish. You are a student-built bot."},
-                    {"role": "user", "content": user_message}
-                ],
-                "temperature": 0.7,
-                "max_tokens": 400
-            },
-            timeout=25
-        )
-        data = r.json()
-        if 'choices' in data and len(data['choices']) > 0:
-            return data['choices'][0]['message']['content']
-        else:
-            print("Groq raw error:", data)
-            return "Sorry, AI is busy. Try again! Error: " + str(data.get('error', {}).get('message','unknown'))
-    except Exception as e:
-        print("AI exception:", e)
-        return f"Sorry, error: {e}"
+    # Try multiple free models in order
+    models = ["llama3-8b-8192", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]
+    for model_name in models:
+        try:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": model_name,
+                    "messages": [
+                        {"role": "system", "content": "You are a friendly AI for Jeafred's Page in Guimba, Philippines. You are student-built. Reply short, helpful, in English or Taglish. Be friendly."},
+                        {"role": "user", "content": user_message}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 400
+                },
+                timeout=25
+            )
+            data = r.json()
+            if 'choices' in data and len(data['choices']) > 0:
+                print(f"Success with model {model_name}")
+                return data['choices'][0]['message']['content']
+            else:
+                print(f"Model {model_name} failed: {data}")
+                continue
+        except Exception as e:
+            print(f"Model {model_name} exception: {e}")
+            continue
+    return "Sorry, all AI models are busy. Please try again in a minute!"
 
 @app.route('/')
 def home():
-    return "Messenger AI Bot is running! Use /api/messenger/webhook", 200
+    return "Messenger AI Bot is running! Syak Man Met!", 200
 
 @app.route('/webhook', methods=['GET', 'POST'])
 @app.route('/api/messenger/webhook', methods=['GET', 'POST'])
@@ -51,7 +56,7 @@ def webhook():
         return "Verification failed", 403
     if request.method == 'POST':
         data = request.get_json()
-        print("Incoming webhook:", data)
+        print("Incoming:", data)
         if data and data.get('object') == 'page':
             for entry in data.get('entry', []):
                 for event in entry.get('messaging', []):
@@ -61,7 +66,7 @@ def webhook():
                         user_text = msg['text']
                         print(f"Message from {sender_id}: {user_text}")
                         reply = ask_ai(user_text)
-                        print(f"AI reply: {reply}")
+                        print(f"Reply: {reply}")
                         if PAGE_TOKEN:
                             try:
                                 send_url = f"https://graph.facebook.com/v20.0/me/messages?access_token={PAGE_TOKEN}"
@@ -72,7 +77,7 @@ def webhook():
                                 )
                                 print("Send result:", send_res.text)
                             except Exception as e:
-                                print("Send exception:", e)
+                                print("Send error:", e)
         return "EVENT_RECEIVED", 200
 
 if __name__ == '__main__':
