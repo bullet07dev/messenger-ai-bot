@@ -11,34 +11,38 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "jeafred_bot_123").strip()
 
 def ask_gemini(user_message):
     if not GEMINI_KEY:
+        print("No GEMINI_KEY set")
         return None
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
-        r = requests.post(
-            url,
-            headers={"Content-Type": "application/json"},
-            json={
-                "contents": [{"parts": [{"text": f"You are a friendly AI for Jeafred's Page in Guimba. Reply short, friendly, in English or Taglish. User says: {user_message}"}]}],
-                "generationConfig": {"maxOutputTokens": 400, "temperature": 0.7}
-            },
-            timeout=20
-        )
-        data = r.json()
-        print(f"Gemini raw: {data}")
-        if 'candidates' in data and len(data['candidates']) > 0:
-            text = data['candidates'][0]['content']['parts'][0]['text']
-            return text
-        else:
-            print(f"Gemini failed: {data}")
-            return None
-    except Exception as e:
-        print(f"Gemini exception: {e}")
-        return None
+    # Try 3 model names - Google keeps changing them
+    models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash-exp"]
+    for model in models:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_KEY}"
+            payload = {
+                "contents": [{"parts": [{"text": f"You are Meta AI, friendly assistant for Jeafred's Page in Guimba. Reply short, helpful. User: {user_message}"}]}],
+                "generationConfig": {"maxOutputTokens": 300, "temperature": 0.7}
+            }
+            print(f"Trying Gemini model {model}...")
+            r = requests.post(url, headers={"Content-Type": "application/json"}, json=payload, timeout=20)
+            data = r.json()
+            print(f"Gemini {model} raw response: {data}")
+            if 'candidates' in data and len(data['candidates']) > 0:
+                text = data['candidates'][0]['content']['parts'][0]['text']
+                print(f"Gemini {model} SUCCESS")
+                return text
+            else:
+                print(f"Gemini {model} failed, trying next")
+                continue
+        except Exception as e:
+            print(f"Gemini {model} exception: {e}")
+            continue
+    return None
 
 def ask_groq(user_message):
     if not GROQ_KEY:
+        print("No GROQ_KEY")
         return None
-    models = ["llama3-8b-8192", "gemma2-9b-it", "mixtral-8x7b-32768"]
+    models = ["llama3-8b-8192", "llama-3.1-8b-instant", "gemma2-9b-it"]
     for model_name in models:
         try:
             r = requests.post(
@@ -47,13 +51,13 @@ def ask_groq(user_message):
                 json={
                     "model": model_name,
                     "messages": [
-                        {"role": "system", "content": "You are friendly AI for Jeafred's Page."},
+                        {"role": "system", "content": "You are friendly AI for Jeafred."},
                         {"role": "user", "content": user_message}
                     ],
                     "temperature": 0.7,
-                    "max_tokens": 400
+                    "max_tokens": 300
                 },
-                timeout=20
+                timeout=15
             )
             data = r.json()
             if 'choices' in data:
@@ -65,18 +69,20 @@ def ask_groq(user_message):
     return None
 
 def ask_ai(user_message):
-    # Try Gemini first (free and stable), then Groq
+    # Try Gemini first
     reply = ask_gemini(user_message)
     if reply:
         return reply
+    # Then Groq
     reply = ask_groq(user_message)
     if reply:
         return reply
-    return "Hi boss! I'm online now but my AI brain is resting. Try again in 30 seconds - I'm a free student bot from Guimba! Syak man met!"
+    # Fallback - but now we show what went wrong
+    return f"Syak man met! I'm online (bot is working!) but my AI keys need checking. Your message was: '{user_message}'. I'm a free student bot from Guimba - add a valid GEMINI_KEY or GROQ_KEY in Render to make me smarter!"
 
 @app.route('/')
 def home():
-    return "Messenger AI Bot is running! Gemini + Groq ready!", 200
+    return "Bot is running! Check /logs in Render for errors", 200
 
 @app.route('/webhook', methods=['GET', 'POST'])
 @app.route('/api/messenger/webhook', methods=['GET', 'POST'])
@@ -99,15 +105,11 @@ def webhook():
                         user_text = msg['text']
                         print(f"Message from {sender_id}: {user_text}")
                         reply = ask_ai(user_text)
-                        print(f"Reply: {reply}")
+                        print(f"Final reply: {reply}")
                         if PAGE_TOKEN:
                             try:
                                 send_url = f"https://graph.facebook.com/v20.0/me/messages?access_token={PAGE_TOKEN}"
-                                send_res = requests.post(
-                                    send_url,
-                                    json={"recipient": {"id": sender_id}, "message": {"text": reply}},
-                                    timeout=10
-                                )
+                                send_res = requests.post(send_url, json={"recipient": {"id": sender_id}, "message": {"text": reply}}, timeout=10)
                                 print("Send result:", send_res.text)
                             except Exception as e:
                                 print("Send error:", e)
