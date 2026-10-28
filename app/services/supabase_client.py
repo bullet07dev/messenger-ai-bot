@@ -10,13 +10,15 @@ class SupabaseService:
                 from supabase import create_client
                 self.client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
                 logger.info("Supabase connected")
+            except ImportError:
+                logger.warning("Supabase library not installed - using memory fallback. Install with: pip install supabase==2.3.0")
+                self.client = None
             except Exception as e:
                 logger.error(f"Supabase connection failed: {e}")
                 self.client = None
         else:
-            logger.info("Supabase not configured - using in-memory fallback")
+            logger.info("Supabase not configured - using in-memory fallback (bookings will be lost when Render sleeps)")
     
-    # Bookings
     def save_booking(self, booking):
         if self.client:
             try:
@@ -57,7 +59,6 @@ class SupabaseService:
                 logger.error(f"Supabase get all bookings error: {e}")
         return []
     
-    # User states (for booking flow)
     def save_state(self, user_id, state):
         if self.client:
             try:
@@ -82,7 +83,6 @@ class SupabaseService:
             except Exception as e:
                 logger.error(f"Supabase clear state error: {e}")
     
-    # Logs for observability (enterprise)
     def log_message(self, log_data):
         if self.client:
             try:
@@ -90,7 +90,6 @@ class SupabaseService:
             except Exception as e:
                 logger.error(f"Supabase log error: {e}")
     
-    # User language preference
     def save_user_lang(self, user_id, lang):
         if self.client:
             try:

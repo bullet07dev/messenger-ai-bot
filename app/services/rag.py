@@ -1,9 +1,6 @@
 import logging
 logger = logging.getLogger(__name__)
 
-# Enterprise RAG - Free tier using Qdrant or Supabase pgvector
-# For now, implement local knowledge base that will be replaced by vector DB later
-
 KNOWLEDGE_BASE = '''
 Business: Jeafred Photography & Resort, Guimba, Nueva Ecija
 
@@ -26,44 +23,33 @@ RESORT RATES:
 - Family Villa 5 pax: ₱5,000/night
 - Barkada Package 10 pax: ₱8,000/night
 
-LANGUAGES: Ilocano (local Guimba), Tagalog, English. Detect and reply in same language.
+LANGUAGES: Ilocano (local Guimba), Tagalog, English.
 
-BOOKING FLOW: Customer says BOOK -> ask details -> confirm.
+BOOKING: Customer says BOOK -> ask details -> confirm.
 
-POLICIES: Downpayment 50% to confirm booking. Cancellation 1 week before = 50% refund. No show = no refund.
+POLICIES: Downpayment 50% to confirm. Cancellation 1 week before = 50% refund.
 '''
 
 class RAGService:
     def __init__(self, config):
         self.config = config
         self.qdrant_client = None
+        # Qdrant is optional - only if installed and configured
         if config.QDRANT_URL and config.QDRANT_API_KEY:
             try:
                 from qdrant_client import QdrantClient
                 self.qdrant_client = QdrantClient(url=config.QDRANT_URL, api_key=config.QDRANT_API_KEY)
                 logger.info("Qdrant connected")
+            except ImportError:
+                logger.warning("Qdrant not installed - using local knowledge base")
             except Exception as e:
                 logger.error(f"Qdrant connection failed: {e}")
     
     def search(self, query):
-        # Simple keyword search for now - will be replaced by vector search
-        # When Qdrant is enabled, this will do semantic search
         query_lower = query.lower()
-        relevant = []
-        
-        # Simple logic - if query contains rate keywords, return rates
         if any(k in query_lower for k in ["rate", "price", "magkano", "manu", "presyo", "gold", "silver", "bronze", "standard", "deluxe", "family", "barkada", "photo", "video", "drone", "sde", "album"]):
             return KNOWLEDGE_BASE
-        
-        if self.qdrant_client:
-            try:
-                # Future: semantic search
-                # results = self.qdrant_client.search(collection_name="knowledge", query_vector=...)
-                pass
-            except:
-                pass
-        
-        return KNOWLEDGE_BASE if relevant or len(query) > 3 else ""
+        return KNOWLEDGE_BASE if len(query) > 3 else ""
     
     def get_context_for_llm(self, query):
         context = self.search(query)
