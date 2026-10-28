@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Jeafred Bot - Enterprise Dashboard V2</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#f5f5f5}
+.card{background:white;padding:20px;border-radius:10px;margin:10px 0;box-shadow:0 2px 5px rgba(0,0,0,0.1)}
+.header{background:#1877f2;color:white;padding:20px;border-radius:10px}
+.stat{display:inline-block;padding:10px 20px;background:#e7f3ff;border-radius:8px;margin:5px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px;text-align:left;border-bottom:1px solid #ddd}
+th{background:#f0f0f0}
+.btn{padding:8px 15px;background:#1877f2;color:white;border:none;border-radius:5px;cursor:pointer}
+.btn:hover{background:#166fe5}
+input{padding:10px;width:300px;border:1px solid #ddd;border-radius:5px}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>🏢 Jeafred Enterprise Bot V2</h1>
+<p>Multi-Page • Trilingual • AI Router • Supabase • RAG</p>
+</div>
+
+<div class="card">
+<h3>🔑 Connect</h3>
+<p>Enter VERIFY_TOKEN to view bookings:</p>
+<input id="token" placeholder="jeafred_bot_123" value="jeafred_bot_123">
+<button class="btn" onclick="load()">Load Dashboard</button>
+<button class="btn" onclick="checkHealth()">Health Check</button>
+<p id="health"></p>
+</div>
+
+<div class="card">
+<h3>📊 Stats</h3>
+<div id="stats">Click Load Dashboard</div>
+</div>
+
+<div class="card">
+<h3>📋 Bookings (Last 50)</h3>
+<div id="bookings">Click Load Dashboard</div>
+</div>
+
+<div class="card">
+<h3>🚀 Enterprise V2 Features</h3>
+<ul>
+<li>✅ Supabase Postgres (bookings never lost when Render sleeps)</li>
+<li>✅ AI Router: Gemini Flash → Groq Llama 3.1/3.3 → Rule-based (logs which model used)</li>
+<li>✅ Intent Classifier (0ms, free): BOOKING vs FAQ vs CHIT_CHAT</li>
+<li>✅ RAG: Vector search over rates (no hallucination)</li>
+<li>✅ Trilingual: Ilocano (Guimba) + Tagalog + English, remembers user language</li>
+<li>✅ Interactive: Quick reply buttons for all flows</li>
+<li>✅ Multi-tenant: One repo powers many Pages via PAGE_ID_1, PAGE_TOKEN_1 env vars</li>
+<li>✅ Observability: /health, message_logs table (which AI answered, which language)</li>
+<li>✅ Human Handoff: Auto-pause 30 mins when human needed</li>
+<li>✅ Admin API: /api/admin/bookings?key=VERIFY_TOKEN</li>
+<li>✅ Security: App Secret signature verification</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>📖 Next Steps (Incremental)</h3>
+<ol>
+<li><b>Week 1:</b> Setup Supabase (free) - create tables (SQL below) - add env vars</li>
+<li><b>Week 2:</b> Add Qdrant (free) for RAG - upload rates</li>
+<li><b>Week 3:</b> Build Vercel dashboard with charts</li>
+<li><b>Week 4:</b> Add GCash payment link</li>
+<li><b>Week 5:</b> Persistent Menu + Carousels (photo packages with images)</li>
+</ol>
+<p><b>Supabase SQL to run:</b></p>
+<pre style="background:#f0f0f0;padding:10px;overflow:auto">
+-- Run in Supabase SQL Editor
+create table bookings (
+  booking_id text primary key,
+  type text,
+  user_id text,
+  page_id text,
+  customer_name text,
+  business text,
+  status text default 'pending',
+  created_at timestamp default now(),
+  data jsonb
+);
+create table user_states (
+  user_id text primary key,
+  state jsonb,
+  updated_at timestamp default now()
+);
+create table users (
+  user_id text primary key,
+  preferred_lang text,
+  created_at timestamp default now()
+);
+create table message_logs (
+  id bigserial primary key,
+  user_id text,
+  page_id text,
+  message text,
+  reply text,
+  intent text,
+  model_used text,
+  lang text,
+  customer_name text,
+  created_at timestamp default now()
+);
+create table handoffs (
+  user_id text primary key,
+  page_id text,
+  active boolean,
+  created_at timestamp default now()
+);
+-- Enable RLS off for simplicity (or add policies)
+alter table bookings disable row level security;
+alter table user_states disable row level security;
+alter table users disable row level security;
+alter table message_logs disable row level security;
+alter table handoffs disable row level security;
+</pre>
+</div>
+
+<script>
+async function checkHealth(){
+  try{
+    let r = await fetch('/health');
+    let j = await r.json();
+    document.getElementById('health').innerHTML = '<pre>'+JSON.stringify(j, null, 2)+'</pre>';
+  }catch(e){ document.getElementById('health').innerText = 'Error: '+e; }
+}
+
+async function load(){
+  let token = document.getElementById('token').value;
+  try{
+    let r = await fetch('/api/admin/stats?key='+token);
+    let j = await r.json();
+    document.getElementById('stats').innerHTML = '<pre>'+JSON.stringify(j, null, 2)+'</pre>';
+    
+    let r2 = await fetch('/api/admin/bookings?key='+token);
+    let j2 = await r2.json();
+    let html = '<p>Total: '+j2.count+'</p><table><tr><th>ID</th><th>Type</th><th>Name</th><th>Details</th><th>Status</th></tr>';
+    for(let b of j2.bookings.slice(0,50)){
+      let details = b.data ? JSON.stringify(b.data).substring(0,100) : (b.package || b.room_type || b.product || '');
+      html += '<tr><td>'+ (b.booking_id || b.id) +'</td><td>'+b.type+'</td><td>'+ (b.customer_name || b.data?.name || '') +'</td><td>'+details+'</td><td>'+b.status+'</td></tr>';
+    }
+    html += '</table>';
+    document.getElementById('bookings').innerHTML = html;
+  }catch(e){
+    document.getElementById('stats').innerText = 'Error: '+e + ' - Make sure VERIFY_TOKEN is correct and Supabase is configured (or it will use memory fallback)';
+  }
+}
+checkHealth();
+</script>
+</body>
+</html>
