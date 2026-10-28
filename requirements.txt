@@ -1,11 +1,11 @@
-Flask==3.0.0
+Flask==2.3.3
 requests==2.31.0
 python-dotenv==1.0.0
-supabase==2.3.0
-qdrant-client==1.7.0
-redis==5.0.1
-upstash-redis==0.6.0
-dateparser==1.2.0
-langdetect==1.0.9
 python-dateutil==2.8.2
+dateparser==1.2.0
 gunicorn==21.2.0
+# Optional - will work without these, but install if you have Python 3.8+
+# supabase==2.3.0
+# qdrant-client==1.7.0
+# upstash-redis==0.6.0
+# redis==5.0.1
